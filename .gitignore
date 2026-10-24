@@ -1,0 +1,12 @@
+# Configuración privada de la placa: Wi-Fi, credencial y certificado.
+config.h
+.env
+
+# Archivos generados por compilación y herramientas locales.
+build/
+.pio/
+.vscode/
+*.bin
+*.elf
+*.map
+.DS_Store
