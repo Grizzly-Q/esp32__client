@@ -37,3 +37,12 @@ El servidor y el protocolo se verifican con un ESP32 emulado mediante WebSocket 
 `esp32_monitoring.ino` inicializa Serial y llama a los módulos. `sensores.h/.cpp` expone la lectura física. `comunicacion.h/.cpp` mantiene Wi-Fi, la tarea histórica y el monitoreo temporal. `configuracion_tipos.h` define cada sensor configurado; `config.h` y su plantilla incluyen el certificado público de `certificado_raiz.h`. Mantener todos los archivos juntos al copiar el proyecto a la laptop.
 
 Al arrancar con marcadores `CONFIGURAR` en Wi-Fi, credencial o IDs de sensores, el programa informa por Serial y detiene el inicio para que se complete la configuración. No hay credenciales reales incluidas.
+
+
+## Lectura local de sensores, sin servidor
+
+El sketch de `esp32_monitoring.ino` inicia `initializeSensors()` y llama a `processSensors()`. Esta última lee el ADC del FC-28, los dos contactos de nivel y la humedad/temperatura del DHT11; imprime el estado por Serial cada dos segundos. No inicia Wi-Fi, no crea tareas de telemetría y no controla relés.
+
+Asignación propuesta para la placa ESP32 clásica: FC-28 AO en GPIO34, flotadores en GPIO32 y GPIO33, y datos del DHT11 en GPIO25. Ajustar el cableado a esos pines antes de cargar el sketch. GPIO34 es entrada solamente y parte de ADC1; GPIO32/33 son entradas digitales sin usar los GPIO de arranque 4/5. La lectura de flotadores asume contactos pasivos conectados entre GPIO y GND, cerrados cuando indican activo; verificar con multímetro el estado y orientar según el fabricante. Confirmar que la salida AO del FC-28 no exceda 3.3 V.
+
+La lectura del FC-28 se muestra como valor ADC crudo, no como porcentaje calibrado. `sensorAvailable()` y `readSensorValue()` siguen reservadas para la integración con la API y no participan en este modo local. Mantener la bomba y el circuito de potencia del relé desconectados durante estas lecturas.

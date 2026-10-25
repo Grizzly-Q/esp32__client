@@ -1,16 +1,15 @@
 #include <Arduino.h>
 #include "sensores.h"
-#include "comunicacion.h"
 
-/** Inicia el diagnóstico serie, los sensores y la comunicación del controlador. */
+/** Inicia Serial y prepara únicamente los sensores locales. */
 void setup() {
   Serial.begin(115200);
   initializeSensors();
-  initializeCommunication();
+  Serial.println("Lectura local iniciada; comunicación con el servidor desactivada.");
 }
 
-/** Mantiene el monitoreo y cede brevemente tiempo a las tareas de la placa. */
+/** Lee los sensores cada dos segundos y muestra sus estados en el Monitor serie. */
 void loop() {
-  processCommunication();
-  delay(2);
+  processSensors();
+  delay(10);
 }
