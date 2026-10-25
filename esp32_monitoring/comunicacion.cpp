@@ -12,12 +12,8 @@
 #include <freertos/task.h>
 #include <time.h>
 #include <math.h>
-
-#if __has_include("config.h")
 #include "config.h"
-#else
-#include "config.example.h"
-#endif
+
 
 namespace {
 
