@@ -4,10 +4,11 @@
 #include "sensores.h"
 
 namespace {
-    constexpr int PIN_HUMEDAD_SUELO = 34;
-  constexpr int PIN_NIVEL_AGUA_SUPERIOR = 32;
-  constexpr int PIN_NIVEL_AGUA_INFERIOR = 33;
-  constexpr int PIN_DHT = 25;
+  constexpr int PIN_HUMEDAD_SUELO = 34;
+  // Confirmar físicamente cuál flotador está arriba y cuál está abajo.
+  constexpr int PIN_NIVEL_AGUA_SUPERIOR = 18;
+  constexpr int PIN_NIVEL_AGUA_INFERIOR = 19;
+  constexpr int PIN_DHT = 4;
   constexpr int TIPO_DHT = DHT11;
   constexpr uint32_t INTERVALO_LECTURA_MS = 2000;
   uint32_t ultimaLectura = 0;
@@ -62,14 +63,19 @@ void processSensors() {
   const float humedadAmbiente = dht.readHumidity();
   const float temperatura = dht.readTemperature();
 
-  Serial.printf("FC-28 ADC: %d | Flotador 65%%: %s | Flotador 20%%: %s",
-                humedadSueloRaw,
-                nivelSuperiorActivo ? "ACTIVO" : "INACTIVO",
+  Serial.println("\n--- Lectura de sensores ---");
+  Serial.printf("Suelo (ADC, 0-4095): %d\n", humedadSueloRaw);
+  if (humedadSueloRaw == 4095) {
+    Serial.println("  Valor maximo: comprobar sensor y conexiones si no cambia.");
+  }
+  Serial.printf("Flotador superior (D%d): %s\n", PIN_NIVEL_AGUA_SUPERIOR,
+                nivelSuperiorActivo ? "ACTIVO" : "INACTIVO");
+  Serial.printf("Flotador inferior (D%d): %s\n", PIN_NIVEL_AGUA_INFERIOR,
                 nivelInferiorActivo ? "ACTIVO" : "INACTIVO");
 
   if (isfinite(humedadAmbiente) && isfinite(temperatura)) {
-    Serial.printf(" | DHT11: %.1f %%HR, %.1f C\n", humedadAmbiente, temperatura);
+    Serial.printf("Humedad del aire: %.1f %%\nTemperatura: %.1f C\n", humedadAmbiente, temperatura);
   } else {
-    Serial.println(" | DHT11: sin lectura válida");
+    Serial.println("DHT11: sin lectura valida; comprobar sensor y conexiones.");
   }
 }
