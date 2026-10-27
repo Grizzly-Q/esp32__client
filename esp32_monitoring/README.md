@@ -13,3 +13,5 @@ El porcentaje de suelo es una referencia de demostración interpolada entre 4095
 El Monitor serie usa 115200 baudios y muestra lecturas cada dos segundos. La comunicación envía histórico aproximadamente cada 30 segundos y atiende solicitudes temporales por WebSocket. La conexión en vivo debe ser solicitada por un cliente autorizado; la conexión abierta por sí sola no produce lecturas rápidas. Las funciones de comunicación y su certificado deben probarse en la placa y contra el despliegue real; no se ha verificado aquí la conexión de extremo a extremo.
 
 [Contrato de comunicación](../docs/protocolo.md).
+
+Para diagnosticar, reiniciar la placa con el Monitor serie a 115200 baudios y revisar los mensajes de Wi-Fi, NTP, WebSocket y telemetría. No compartir contraseñas ni credenciales. El estado HTTP de telemetría y la conexión WebSocket son independientes; que se envíe historial no garantiza monitoreo en vivo.

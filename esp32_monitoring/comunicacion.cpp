@@ -42,6 +42,9 @@ SemaphoreHandle_t cacheMutex;
 String authorizationHeader;
 String bootId;
 uint32_t readingCounter = 0;
+wl_status_t ultimoEstadoWifi = WL_IDLE_STATUS;
+bool horaInformada = false;
+uint32_t ultimoAvisoEspera = 0;
 
 /** Compara plazos cortos y soporta el desbordamiento de millis(). */
 bool reached(uint32_t now, uint32_t deadline) {
@@ -83,14 +86,23 @@ void stopLive(size_t index) {
 
 /** Procesa órdenes conocidas, confirma la frecuencia real y limita toda concesión a 60 segundos. */
 void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
+  if (type == WStype_CONNECTED) {
+    Serial.println("WebSocket conectado; esperando autenticacion del servidor.");
+    return;
+  }
+  if (type == WStype_ERROR) {
+    Serial.println("Error de WebSocket; revisar red, servidor, TLS y credencial.");
+    return;
+  }
   if (type == WStype_DISCONNECTED) {
     Serial.println("Conexion en vivo desconectada; se intentara reconectar.");
     for (size_t index = 0; index < SENSOR_COUNT; index++) stopLive(index);
     return;
   }
-  if (type != WStype_TEXT || length > 2048) return;
+  if (type != WStype_TEXT) return;
+  if (length > 2048) { Serial.println("Mensaje WebSocket demasiado grande."); return; }
   JsonDocument message;
-  if (deserializeJson(message, payload, length)) return;
+  if (deserializeJson(message, payload, length)) { Serial.println("Mensaje WebSocket JSON invalido."); return; }
   const String kind = message["type"] | "";
   if (kind == "monitoring.ready") {
     Serial.println("Conexion en vivo autenticada y lista.");
@@ -116,7 +128,10 @@ void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
   if (accepted) ack["intervalMs"] = applied;
   String response;
   serializeJson(ack, response);
+  Serial.printf("Monitoreo: sensor %s, solicitado %lu ms, aceptado: %s, aplicado %lu ms.\n",
+                sensorId.c_str(), static_cast<unsigned long>(requested), accepted ? "si" : "no", static_cast<unsigned long>(applied));
   const bool sent = channel.sendTXT(response);
+  if (!sent) Serial.println("No se pudo enviar la confirmacion de monitoreo.");
   if (!accepted || !sent) return;
   sensors[index].requestId = requestId;
   sensors[index].intervalMs = applied;
@@ -172,9 +187,10 @@ void normalSender(void*) {
             Serial.printf("Telemetría rechazada (%d): revisar clave, sensores y contrato.\n", status);
             pending = String();
           }
+          else Serial.printf("Error temporal de telemetria (codigo %d).\n", status);
           http.end();
-        }
-      }
+        } else Serial.println("No se pudo preparar la conexion HTTPS de telemetria.");
+      } else Serial.println("Sin lecturas validas para enviar al historial.");
       nextAttempt = millis() + (pending.length() ? 5000 : NORMAL_INTERVAL_MS);
     }
     vTaskDelay(pdMS_TO_TICKS(100));
@@ -199,6 +215,8 @@ void initializeCommunication() {
   if (!cacheMutex) { Serial.println("No se pudo crear la caché."); for (;;) delay(1000); }
   bootId = createBootId();
   for (size_t index = 0; index < SENSOR_COUNT; index++) sensors[index].sampledAt = millis() - NORMAL_INTERVAL_MS;
+  Serial.printf("Servidor configurado: %s:%u; sensores: %u.\n", API_HOST, API_PORT, static_cast<unsigned>(SENSOR_COUNT));
+  Serial.println("Conectando Wi-Fi y esperando sincronizacion de hora NTP.");
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -216,6 +234,18 @@ void initializeCommunication() {
 
 /** Atiende órdenes y toma lecturas físicas; un vencimiento local siempre desactiva el modo rápido. */
 void processCommunication() {
+  const wl_status_t estadoWifi = WiFi.status();
+  if (estadoWifi != ultimoEstadoWifi) {
+    ultimoEstadoWifi = estadoWifi;
+    Serial.printf("Estado Wi-Fi: %d%s.\n", static_cast<int>(estadoWifi), estadoWifi == WL_CONNECTED ? " (conectado)" : " (sin conexion)");
+    if (estadoWifi == WL_CONNECTED) Serial.printf("IP local: %s\n", WiFi.localIP().toString().c_str());
+  }
+  const bool horaLista = time(nullptr) >= 1700000000;
+  if (horaLista && !horaInformada) { Serial.println("Hora NTP sincronizada; habilitando WebSocket."); horaInformada = true; }
+  if (millis() - ultimoAvisoEspera >= 15000 && (estadoWifi != WL_CONNECTED || !horaLista)) {
+    ultimoAvisoEspera = millis();
+    Serial.println(estadoWifi != WL_CONNECTED ? "Esperando conexion Wi-Fi." : "Esperando sincronizacion NTP; WebSocket aun no inicia.");
+  }
   if (WiFi.status() == WL_CONNECTED && time(nullptr) >= 1700000000) channel.loop();
   else for (size_t index = 0; index < SENSOR_COUNT; index++) stopLive(index);
   for (size_t index = 0; index < SENSOR_COUNT; index++) {
@@ -228,6 +258,7 @@ void processCommunication() {
     float raw;
     if (!readSensorValue(SENSOR_CONFIGURATION[index].id, raw) || !isfinite(raw) || raw < 0 || raw > 99999.99) {
       xSemaphoreTake(cacheMutex, portMAX_DELAY);
+      Serial.printf("Lectura invalida para sensor %s.\n", SENSOR_CONFIGURATION[index].id);
       sensors[index].hasValue = false;
       xSemaphoreGive(cacheMutex);
       continue;
