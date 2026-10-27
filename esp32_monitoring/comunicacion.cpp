@@ -84,6 +84,7 @@ void stopLive(size_t index) {
 /** Procesa órdenes conocidas, confirma la frecuencia real y limita toda concesión a 60 segundos. */
 void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
   if (type == WStype_DISCONNECTED) {
+    Serial.println("Conexion en vivo desconectada; se intentara reconectar.");
     for (size_t index = 0; index < SENSOR_COUNT; index++) stopLive(index);
     return;
   }
@@ -91,6 +92,10 @@ void onWebSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
   JsonDocument message;
   if (deserializeJson(message, payload, length)) return;
   const String kind = message["type"] | "";
+  if (kind == "monitoring.ready") {
+    Serial.println("Conexion en vivo autenticada y lista.");
+    return;
+  }
   if (kind != "monitoring.start" && kind != "monitoring.stop") return;
   const String sensorId = message["sensorId"] | "";
   const String requestId = message["requestId"] | "";
@@ -162,7 +167,7 @@ void normalSender(void*) {
           http.addHeader("Content-Type", "application/json");
           http.addHeader("Authorization", String("Bearer ") + ESP32_CREDENTIAL);
           const int status = http.POST(pending);
-          if (status == 200) pending = String();
+          if (status == 200) { Serial.println("Lecturas historicas enviadas."); pending = String(); }
           else if (status >= 400 && status < 500 && status != 429) {
             Serial.printf("Telemetría rechazada (%d): revisar clave, sensores y contrato.\n", status);
             pending = String();
@@ -221,7 +226,12 @@ void processCommunication() {
     if (now - sensors[index].sampledAt < interval || !sensorAvailable(SENSOR_CONFIGURATION[index].id)) continue;
     sensors[index].sampledAt = now;
     float raw;
-    if (!readSensorValue(SENSOR_CONFIGURATION[index].id, raw) || !isfinite(raw) || raw < 0 || raw > 99999.99) continue;
+    if (!readSensorValue(SENSOR_CONFIGURATION[index].id, raw) || !isfinite(raw) || raw < 0 || raw > 99999.99) {
+      xSemaphoreTake(cacheMutex, portMAX_DELAY);
+      sensors[index].hasValue = false;
+      xSemaphoreGive(cacheMutex);
+      continue;
+    }
     const double value = round(static_cast<double>(raw) * 100.0) / 100.0;
     const String readingId = bootId + ":" + String(++readingCounter);
     const String measuredAt = utcNow();

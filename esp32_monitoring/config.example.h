@@ -14,6 +14,6 @@ constexpr uint16_t API_PORT = 443;
 // No usar el JWT de una persona ni publicar este archivo cuando tenga secretos.
 constexpr char ESP32_CREDENTIAL[] = "esp32_CONFIGURAR_CREDENCIAL";
 
-// Sustituir por los IDs reales de GET /controllers/<id>/sensors.
-// Agregar una entrada por sensor; ajustar el intervalo según su modelo físico.
-constexpr SensorConfiguration SENSOR_CONFIGURATION[] = {{"CONFIGURAR_ID_SENSOR", 1000}};
+// IDs del controlador 3: humedad ambiental, nivel de agua y humedad del suelo.
+// El DHT11 requiere al menos dos segundos entre lecturas.
+constexpr SensorConfiguration SENSOR_CONFIGURATION[] = {{"7", 2000}, {"8", 2000}, {"9", 2000}};
